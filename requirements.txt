@@ -1,0 +1,25 @@
+# requirements.txt - Pin all versions for reproducibility
+scrapy==2.11.0
+scrapy-playwright==0.0.34
+playwright==1.40.0
+readability-lxml==0.8.1
+trafilatura==1.6.2
+markdownify==0.11.6
+publicsuffix2==2.20191221
+idna==3.6
+orjson==3.9.10
+typer[all]==0.12.3
+click==8.1.7
+rich==13.7.0
+pydantic==2.5.0
+beautifulsoup4==4.12.0
+lxml==4.9.3
+pytest==7.4.3
+pytest-asyncio==0.21.1
+pyyaml==6.0.1
+ruff==0.1.6
+mypy==1.7.1
+pytest-cov==4.1.0
+requests==2.31.0
+types-PyYAML==6.0.12.12
+types-requests==2.31.0.20240106

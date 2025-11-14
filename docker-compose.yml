@@ -1,0 +1,57 @@
+# docker-compose.yml - Production configuration
+
+services:
+  webarc:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: webarc:latest
+    container_name: webarc_crawler
+    
+    # Resource limits
+    mem_limit: 2g
+    cpus: 2
+    pids_limit: 100
+    
+    # Environment variables
+    environment:
+      - PYTHONUNBUFFERED=1
+      - LOG_LEVEL=INFO
+    
+    # Volume mounts
+    volumes:
+      # Output directory (read-write)
+      - ./out:/app/out
+      
+      # Configuration (read-only)
+      - ./config:/app/config:ro
+      
+      # Blocklists (read-only)
+      - ./lists:/app/lists:ro
+      
+      # Logs (read-write)
+      - ./logs:/app/logs
+      
+      # Artifacts (read-write)
+      - ./artifacts:/app/artifacts
+    
+    # Don't set default command - allow override
+    # command: >
+    #   --help
+    
+    # Network mode (optional: host for better performance)
+    # network_mode: host
+    
+    # Security options
+    security_opt:
+      - no-new-privileges:true
+    
+    # Restart policy
+    restart: "no"
+    
+    # Logging
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"

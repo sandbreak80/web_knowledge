@@ -1,0 +1,252 @@
+# WebArc Configuration File
+# 
+# This is a comprehensive example configuration file for WebArc.
+# Copy this file to config/webarc.yaml and customize as needed.
+#
+# WebArc is a local-first web crawler that extracts documentation sites
+# into Obsidian-compatible Markdown files.
+
+# ============================================================================
+# CRAWLER SETTINGS
+# ============================================================================
+crawler:
+  # Maximum depth to crawl from seed URL (0 = seed only, 1 = seed + direct links, etc.)
+  max_depth: 3
+  
+  # Concurrent request settings
+  concurrent_requests: 8                    # Total concurrent requests across all domains
+  concurrent_requests_per_domain: 3        # Max concurrent requests per domain (be respectful!)
+  download_delay: 0.5                      # Seconds to wait between requests (same domain)
+  download_timeout: 30                      # Request timeout in seconds
+  
+  # Resource limits
+  max_page_size_mb: 10                      # Skip pages larger than this (prevents memory issues)
+  retry_times: 2                            # Number of retries for failed requests
+  
+  # User agent string (identify your crawler)
+  user_agent: "WebArc/1.0 (+https://github.com/yourorg/webarc) Documentation Archiver"
+  
+  # Auto-throttle: Automatically adjust request rate based on server response times
+  autothrottle_enabled: true
+  autothrottle_start_delay: 1               # Initial delay before throttling starts
+  autothrottle_max_delay: 10                # Maximum delay between requests
+  autothrottle_target_concurrency: 2.0      # Target concurrent requests per domain
+  
+  # Memory management: Stop crawl if memory usage exceeds limits
+  memusage_enabled: true
+  memusage_limit_mb: 1024                   # Hard limit: stop crawl if exceeded
+  memusage_warning_mb: 768                  # Warning threshold: log warning if exceeded
+  
+  # Response size limits
+  download_maxsize: 10485760               # 10MB max response size
+  download_warnsize: 5242880               # 5MB warning threshold
+
+# ============================================================================
+# SAFETY SETTINGS
+# ============================================================================
+safety:
+  # Safety mode: "advisory" (warn but continue) or "enforce" (block and skip)
+  mode: "advisory"
+  
+  # Respect robots.txt (recommended: true)
+  respect_robots_txt: true
+  
+  # Domain restrictions
+  same_domain_only: true                    # Only crawl URLs from same domain as seed
+  
+  # URL validation
+  max_url_length: 2000                      # Block suspiciously long URLs (often spam/tracking)
+  max_query_params: 10                      # Detect parameter explosion (e.g., ?a=1&b=2&c=3...)
+  max_pagination_depth: 50                  # Stop infinite pagination loops
+  entropy_threshold: 3.5                    # UUID/hash detection threshold (higher = stricter)
+  max_redirects: 10                         # Prevent redirect loops
+  
+  # Blocked URL patterns (regex) - URLs matching these will be skipped
+  blocked_patterns:
+    - ".*/auth/.*"                          # Authentication pages
+    - ".*/login/.*"                         # Login pages
+    - ".*/search\\?.*"                      # Search result pages
+    - ".*/api/.*"                           # API endpoints
+    - ".*\\.(zip|exe|dmg|pkg)$"             # Binary files
+  
+  # Pagination detection keywords (URLs with these params are considered pagination)
+  pagination_keywords:
+    - "page"
+    - "offset"
+    - "start"
+    - "limit"
+    - "skip"
+  
+  # Blocklist: Use StevenBlack hosts blocklist to block known malicious/tracking domains
+  use_blocklist: true
+  blocklist_path: "./lists/stevenblack_hosts.txt"
+
+# ============================================================================
+# RENDERING SETTINGS (JavaScript/Playwright)
+# ============================================================================
+render:
+  # Try static HTML first before using JavaScript rendering (faster)
+  static_first: true
+  
+  # Playwright/JavaScript rendering settings
+  js_timeout_ms: 15000                      # Page load timeout in milliseconds
+  js_network_idle_ms: 5000                  # Wait for network idle before extracting
+  browser_pool_size: 3                      # Max concurrent browser instances
+  reuse_contexts: true                       # Reuse browser contexts (faster, uses more memory)
+  disable_images: true                       # Don't load images (faster rendering)
+  
+  # JavaScript detection triggers: If HTML contains these, trigger JS rendering
+  js_detection_triggers:
+    - "Loading..."                          # Common loading indicator
+    - "Please wait"                         # Wait messages
+    - "data-react-root"                     # React framework indicator
+    - "data-reactroot"                      # React framework indicator (legacy)
+    - "ng-app"                              # Angular framework indicator
+    - "vue-app"                             # Vue.js framework indicator
+    - "<div id=\"root\"></div>"             # React root element
+    - "<div id=\"app\"></div>"              # Vue/Angular root element
+  
+  # Browser arguments for Docker compatibility
+  browser_args:
+    - "--no-sandbox"                        # Required for Docker
+    - "--disable-dev-shm-usage"             # Fix shared memory issues in Docker
+    - "--disable-gpu"                       # Disable GPU (not needed in headless mode)
+
+# ============================================================================
+# CONTENT EXTRACTION SETTINGS
+# ============================================================================
+extraction:
+  # Content quality thresholds (pages below these will be skipped)
+  min_content_density: 0.3                  # Minimum content density (0.0-1.0)
+  min_content_length: 100                   # Minimum characters in content
+  min_word_count: 50                        # Minimum words in content
+  max_nav_link_ratio: 0.5                   # Max ratio of nav links to content (detect nav-heavy pages)
+  min_paragraph_count: 1                    # Minimum paragraphs required
+  require_heading: true                     # Must have at least one heading (h1-h6)
+  
+  # HTML tags to preserve in Markdown output
+  preserve_html_tags:
+    - "table"                               # Preserve tables
+    - "pre"                                 # Preserve code blocks
+    - "code"                                # Preserve inline code
+    - "img"                                 # Preserve images
+    - "blockquote"                          # Preserve blockquotes
+  
+  # Content quality checks
+  check_language: true                      # Verify expected language matches
+  detect_paywalls: true                     # Skip paywall pages
+  detect_captcha: true                      # Skip CAPTCHA pages
+
+# ============================================================================
+# OUTPUT SETTINGS
+# ============================================================================
+output:
+  # Output format
+  format: "obsidian"                        # Output format: "obsidian" (recommended)
+  obsidian_link_style: "wikilink"          # Link style: "wikilink" ([[link]]) or "markdown" ([text](link))
+  relative_links: true                     # Use relative paths for internal links
+  preserve_anchors: true                   # Keep #section-id in links
+  slug_strategy: "url-path"                 # Filename strategy: "url-path" or "title-based"
+  max_filename_length: 200                 # Truncate long filenames
+  deduplicate: "content-hash"              # Deduplication: "content-hash" or "url-canonical"
+  
+  # Image handling
+  image_mode: "ignore"                      # "ignore" (skip), "download" (save), or "embed" (base64)
+  image_max_size_mb: 5                     # Per-image size limit (if downloading)
+  image_embed_max_kb: 50                   # Max size for base64 embedding
+  image_formats:                            # Supported image formats
+    - "png"
+    - "jpg"
+    - "jpeg"
+    - "gif"
+    - "svg"
+  
+  # File organization
+  create_index: true                        # Generate _index.md files for directories
+  preserve_directory_structure: true       # Preserve URL directory structure
+  
+  # Character encoding
+  output_encoding: "utf-8"                  # Output file encoding
+  normalize_unicode: "NFC"                 # Unicode normalization: "NFC", "NFD", "NFKC", "NFKD"
+
+# ============================================================================
+# LOGGING SETTINGS
+# ============================================================================
+logging:
+  level: "INFO"                            # Log level: "DEBUG", "INFO", "WARNING", "ERROR"
+  format: "json"                            # Log format: "json" or "text"
+  file: "./logs/webarc.log"                 # Log file path
+  rotate: true                              # Enable log rotation
+  max_log_size_mb: 100                      # Max log file size before rotation
+  backup_count: 5                           # Number of backup log files to keep
+  
+  # Progress reporting
+  show_progress: true                       # Show progress bar in console
+  progress_update_interval: 1               # Progress update interval in seconds
+
+# ============================================================================
+# SITE-SPECIFIC ADAPTERS
+# ============================================================================
+# Adapters customize extraction for specific documentation platforms
+adapters:
+  # Confluence adapter (Atlassian Confluence documentation)
+  confluence:
+    enabled: true
+    domains:                                # Domains to use this adapter for
+      - "docs.appdynamics.com"
+      - "confluence.atlassian.com"
+    content_selector: ".confluence-content" # CSS selector for main content
+    remove_selectors:                       # CSS selectors to remove (sidebar, nav, etc.)
+      - ".ia-fixed-sidebar"
+      - ".page-metadata"
+      - ".footer"
+  
+  # MkDocs adapter (MkDocs documentation sites)
+  mkdocs:
+    enabled: true
+    content_selector: ".md-content"         # CSS selector for main content
+    remove_selectors:                       # CSS selectors to remove
+      - ".md-sidebar"
+      - ".md-header"
+  
+  # Sphinx adapter (Sphinx documentation sites)
+  sphinx:
+    enabled: true
+    content_selector: "div.body"           # CSS selector for main content
+    remove_selectors:                       # CSS selectors to remove
+      - ".sphinxsidebar"
+      - ".related"
+
+# ============================================================================
+# USAGE EXAMPLES
+# ============================================================================
+#
+# 1. Basic crawl:
+#    docker compose run --rm webarc crawl --seed https://docs.example.com
+#
+# 2. Crawl with custom depth:
+#    docker compose run --rm webarc crawl --seed https://docs.example.com --depth 5
+#
+# 3. Plan before crawling:
+#    docker compose run --rm webarc plan --seed https://docs.example.com --estimate
+#
+# 4. Resume interrupted crawl:
+#    docker compose run --rm webarc resume --state-file out/resume.jsonl
+#
+# 5. Validate output:
+#    docker compose run --rm webarc validate --output-dir out/
+#
+# 6. View statistics:
+#    docker compose run --rm webarc stats --output-dir out/
+#
+# ============================================================================
+# TIPS
+# ============================================================================
+#
+# - Start with depth=1 or depth=2 to test before deep crawling
+# - Use --estimate flag in plan command to see how many pages will be crawled
+# - Check logs/webarc.log for detailed crawl information
+# - Use validate command to check output quality before importing to Obsidian
+# - Adjust min_content_density and min_word_count if too many pages are skipped
+# - Increase browser_pool_size for faster JS rendering (uses more memory)
+# - Set safety.mode to "enforce" for production crawls to prevent accidents

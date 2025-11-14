@@ -1,0 +1,37 @@
+@import "tailwindcss";
+
+:root {
+  --background: 244 247 252;
+  --foreground: 15 23 42;
+  --muted: 100 116 139;
+  --border: 203 213 225;
+}
+
+.dark {
+  --background: 10 12 18;
+  --foreground: 226 232 240;
+  --muted: 148 163 184;
+  --border: 71 85 105;
+}
+
+body {
+  font-feature-settings: "rlig" 1, "calt" 1;
+}
+
+:root,
+body {
+  background-color: rgba(var(--background) / 1);
+  color: rgba(var(--foreground) / 1);
+}
+
+.text-muted-foreground {
+  color: rgba(var(--muted) / 1);
+}
+
+.border-border {
+  border-color: rgba(var(--border) / 1);
+}
+
+code {
+  font-family: var(--font-geist-mono);
+}

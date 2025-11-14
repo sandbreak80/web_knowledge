@@ -1,0 +1,3 @@
+# Placeholder for StevenBlack hosts blocklist
+# This file should be populated with actual blocklist data
+# For now, it's empty to allow the project to build

@@ -1,0 +1,44 @@
+# Git
+.git/
+.gitignore
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Virtual environments
+venv/
+env/
+ENV/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# WebArc outputs
+out/
+logs/
+artifacts/
+*.jsonl
+
+# Documentation (keep only essential)
+docs/context/
+.metagross/
+
+# Tests (needed in container for running tests)
+# tests/
+
+# Examples
+examples/
+
+# User configs
+*.local.yaml
+webarc.yaml
