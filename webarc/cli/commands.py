@@ -173,6 +173,11 @@ def crawl(
         "--version-lock",
         help="Restrict crawl to URLs containing this version segment (e.g. /25.10.0/)",
     ),
+    download_only: bool = typer.Option(
+        False,
+        "--download-only",
+        help="Download HTML only, queue for later processing (faster crawling)",
+    ),
 ):
     """
     Execute crawl and extract content.
@@ -211,6 +216,7 @@ def crawl(
         allowed_domain=allow_domain,
         allowed_prefix=allow_prefix,
         version_lock=version_lock,
+        download_only=download_only,
     )
     
     # Link crawler instance to spider
@@ -498,6 +504,216 @@ def validate(
     
     if missing_files:
         raise typer.Exit(1)
+
+
+@app.command()
+def process(
+    queue_dir: str = typer.Option(..., "--queue-dir", help="Queue directory with downloaded HTML files"),
+    out: str = typer.Option("./out", "--out", "-o", help="Output directory"),
+    config_file: Optional[str] = typer.Option(None, "--config", "-c", help="Config file path"),
+    min_content_density: Optional[float] = typer.Option(
+        None,
+        "--min-content-density",
+        help="Override minimum content density required to extract a page (default 0.3)",
+    ),
+    min_word_count: Optional[int] = typer.Option(
+        None,
+        "--min-word-count",
+        help="Override minimum word count required to extract a page (default 50)",
+    ),
+    threads: int = typer.Option(10, "--threads", "-t", help="Number of processing threads"),
+    min_content_length: Optional[int] = typer.Option(
+        None,
+        "--min-content-length",
+        help="Override minimum content length (default 100)",
+    ),
+    max_nav_link_ratio: Optional[float] = typer.Option(
+        None,
+        "--max-nav-link-ratio",
+        help="Override maximum nav link ratio (default 0.5)",
+    ),
+    min_paragraph_count: Optional[int] = typer.Option(
+        None,
+        "--min-paragraph-count",
+        help="Override minimum paragraph count (default 1)",
+    ),
+    require_heading: Optional[bool] = typer.Option(
+        None,
+        "--require-heading/--no-require-heading",
+        help="Require headings (default True)",
+    ),
+    no_quality_checks: bool = typer.Option(
+        False,
+        "--no-quality-checks",
+        help="Disable all quality checks - extract everything",
+    ),
+):
+    """
+    Process queued HTML files from download-only crawl.
+    """
+    from pathlib import Path
+    import json
+    import logging
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+    from webarc.crawler.runner import ExtractionPipeline
+    from webarc.output.writer import OutputWriter
+    from webarc.output.manifest import ManifestWriter
+    from webarc.adapters.router import AdapterRouter
+    from webarc.html2md.converter import ObsidianMarkdownConverter
+    
+    logger = logging.getLogger(__name__)
+    
+    console.print("[bold blue]Processing Queue[/bold blue]\n")
+    
+    queue_path = Path(queue_dir).resolve()
+    if not queue_path.exists():
+        console.print(f"[red]Error:[/red] Queue directory not found: {queue_dir}")
+        console.print(f"[yellow]Debug:[/yellow] Resolved path: {queue_path}")
+        console.print(f"[yellow]Debug:[/yellow] Current working directory: {Path.cwd()}")
+        raise typer.Exit(1)
+    
+    # Debug: list files in directory
+    try:
+        all_files = list(queue_path.iterdir())
+        html_count = len(list(queue_path.glob("*.html")))
+        console.print(f"[yellow]Debug:[/yellow] Directory contains {len(all_files)} files, {html_count} HTML files")
+    except Exception as e:
+        console.print(f"[yellow]Debug:[/yellow] Error listing directory: {e}")
+    
+    # Load config
+    config = load_config(config_file)
+    
+    # Override config with CLI args
+    if no_quality_checks:
+        # Disable all quality checks - extract everything
+        config.extraction.min_content_density = 0.0
+        config.extraction.min_content_length = 0
+        config.extraction.min_word_count = 0
+        config.extraction.max_nav_link_ratio = 1.0
+        config.extraction.min_paragraph_count = 0
+        config.extraction.require_heading = False
+        console.print("[yellow]Quality checks disabled - extracting all files[/yellow]\n")
+    else:
+        # Override individual thresholds if provided
+        if min_content_density is not None:
+            config.extraction.min_content_density = min_content_density
+        if min_word_count is not None:
+            config.extraction.min_word_count = min_word_count
+        if min_content_length is not None:
+            config.extraction.min_content_length = min_content_length
+        if max_nav_link_ratio is not None:
+            config.extraction.max_nav_link_ratio = max_nav_link_ratio
+        if min_paragraph_count is not None:
+            config.extraction.min_paragraph_count = min_paragraph_count
+        if require_heading is not None:
+            config.extraction.require_heading = require_heading
+    
+    # Initialize components
+    output_path = Path(out)
+    output_writer = OutputWriter(output_path, config)
+    manifest_writer = ManifestWriter(output_path)
+    adapter_router = AdapterRouter(config)
+    markdown_converter = ObsidianMarkdownConverter(config)
+    pipeline = ExtractionPipeline(
+        config=config,
+        output_dir=output_path,
+        output_writer=output_writer,
+        manifest_writer=manifest_writer,
+        adapter_router=adapter_router,
+        markdown_converter=markdown_converter,
+    )
+    
+    # Find all HTML files in queue
+    html_files = list(queue_path.glob("*.html"))
+    console.print(f"[green]Found {len(html_files)} files to process[/green]\n")
+    
+    stats = {
+        'processed': 0,
+        'extracted': 0,
+        'skipped': 0,
+        'errors': 0,
+    }
+    
+    def process_file(html_file: Path):
+        """Process a single HTML file from the queue."""
+        meta_file = html_file.with_suffix('.json')
+        
+        if not meta_file.exists():
+            return {'status': 'error', 'reason': 'Missing metadata file'}
+        
+        try:
+            # Load metadata
+            meta = json.loads(meta_file.read_text(encoding='utf-8'))
+            url = meta['url']
+            status = meta.get('status', 200)
+            
+            # Load HTML
+            html = html_file.read_text(encoding='utf-8')
+            
+            # Process through pipeline
+            result = pipeline.process(url, html, status)
+            
+            # NEVER delete files - keep all files for potential reprocessing
+            # Move processed files to _processed subdirectory
+            processed_dir = queue_path / '_processed'
+            processed_dir.mkdir(exist_ok=True)
+            
+            if result['success']:
+                # Move successfully extracted files to _processed
+                html_file.rename(processed_dir / html_file.name)
+                meta_file.rename(processed_dir / meta_file.name)
+                return {'status': 'extracted', 'url': url}
+            else:
+                # Move skipped files to _skipped for potential reprocessing
+                skipped_dir = queue_path / '_skipped'
+                skipped_dir.mkdir(exist_ok=True)
+                html_file.rename(skipped_dir / html_file.name)
+                meta_file.rename(skipped_dir / meta_file.name)
+                return {'status': 'skipped', 'url': url, 'reason': result['reason']}
+                
+        except Exception as e:
+            logger.error(f"Error processing {html_file}: {e}")
+            return {'status': 'error', 'url': str(html_file), 'reason': str(e)}
+    
+    # Process files in parallel
+    with ThreadPoolExecutor(max_workers=threads) as executor:
+        futures = {executor.submit(process_file, html_file): html_file for html_file in html_files}
+        
+        with console.status("[bold green]Processing...") as status:
+            for future in as_completed(futures):
+                stats['processed'] += 1
+                result = future.result()
+                
+                if result['status'] == 'extracted':
+                    stats['extracted'] += 1
+                elif result['status'] == 'skipped':
+                    stats['skipped'] += 1
+                else:
+                    stats['errors'] += 1
+                
+                # Update status
+                if stats['processed'] % 10 == 0:
+                    status.update(f"[bold green]Processed {stats['processed']}/{len(html_files)} (extracted: {stats['extracted']}, skipped: {stats['skipped']}, errors: {stats['errors']})[/bold green]")
+    
+    # Display results
+    console.print("\n[bold]Processing Complete[/bold]")
+    console.print(f"  Processed: {stats['processed']}")
+    console.print(f"  Extracted: {stats['extracted']}")
+    console.print(f"  Skipped: {stats['skipped']} (moved to _skipped/ for reprocessing)")
+    console.print(f"  Errors: {stats['errors']}")
+    
+    processed_dir = queue_path / '_processed'
+    skipped_dir = queue_path / '_skipped'
+    processed_count = len(list(processed_dir.glob("*.html"))) if processed_dir.exists() else 0
+    skipped_count = len(list(skipped_dir.glob("*.html"))) if skipped_dir.exists() else 0
+    
+    console.print(f"\n[bold]File Status:[/bold]")
+    console.print(f"  Processed (extracted): {processed_count} files in {processed_dir}")
+    if stats['skipped'] > 0:
+        console.print(f"  Skipped: {skipped_count} files in {skipped_dir}")
+        console.print(f"\n[yellow]Note:[/yellow] All files are preserved (none deleted)")
+        console.print(f"[yellow]You can reprocess skipped files with different quality thresholds:[/yellow]")
+        console.print(f"[dim]  docker compose run --rm webarc process --queue-dir {skipped_dir} --out {out} --min-content-density 0.01 --min-word-count 1[/dim]")
 
 
 @app.command()

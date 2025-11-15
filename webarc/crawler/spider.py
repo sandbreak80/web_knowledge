@@ -122,7 +122,12 @@ class WebArcSpider(scrapy.Spider):
             }
         )
 
+        # STRICT FILTER: Only allow extra_seed_urls that start with the exact seed URL prefix
+        seed_prefix = '/'.join(self.seed_url.split('/')[:7])  # Get up to /en
         for extra_url in self.extra_seed_urls:
+            if not extra_url.startswith(seed_prefix):
+                logger.debug(f"Skipping extra_seed_url {extra_url}: does not start with {seed_prefix}")
+                continue
             canonical_extra = canonicalize_url(extra_url)
             if canonical_extra in self.visited_urls:
                 continue
@@ -173,10 +178,11 @@ class WebArcSpider(scrapy.Spider):
                 logger.debug(f"Skipping binary file link: {absolute_url}")
                 continue
             
-            # Simple check: only allow URLs starting with the seed URL path
-            # This ensures we only crawl /appd/24.x/latest/en paths
-            if not absolute_url.startswith('https://docs.appdynamics.com/appd/24.x/latest/en'):
-                logger.debug(f"Skipping {absolute_url}: does not start with https://docs.appdynamics.com/appd/24.x/latest/en")
+            # STRICT FILTER: Only allow URLs that start with the exact seed URL prefix
+            # Extract exact prefix from seed URL (e.g., https://docs.appdynamics.com/appd/24.x/latest/en)
+            seed_prefix = '/'.join(self.seed_url.split('/')[:7])  # Get up to /en
+            if not absolute_url.startswith(seed_prefix):
+                logger.debug(f"Skipping {absolute_url}: does not start with {seed_prefix}")
                 self.stats['pages_skipped'] += 1
                 continue
             

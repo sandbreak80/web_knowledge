@@ -110,18 +110,20 @@ class ContentQuality:
         if self.paragraph_count < min_paragraph_count:
             return False, f"Insufficient paragraphs: {self.paragraph_count}"
         
-        # Check for "Page Not Found" indicators
-        title = self.soup.find('title')
-        if title and any(indicator in title.text.lower() for indicator in ['404', 'not found', 'error']):
-            return False, "404 or error page detected"
-        
-        # Check for paywall indicators
-        paywall_indicators = ['subscribe now', 'premium content', 'paid subscribers', 'paywall']
-        if any(indicator in self.text.lower() for indicator in paywall_indicators):
-            return False, "Paywall detected"
-        
-        # Check for CAPTCHA
-        if 'captcha' in self.text.lower() or self.soup.find(class_=lambda x: x and 'captcha' in x.lower()):
-            return False, "CAPTCHA detected"
+        # Check for "Page Not Found" indicators (only if quality checks enabled)
+        # Skip these checks if all thresholds are at minimum (quality checks disabled)
+        if not (min_content_density == 0.0 and min_content_length == 0 and min_word_count == 0):
+            title = self.soup.find('title')
+            if title and any(indicator in title.text.lower() for indicator in ['404', 'not found', 'error']):
+                return False, "404 or error page detected"
+            
+            # Check for paywall indicators
+            paywall_indicators = ['subscribe now', 'premium content', 'paid subscribers', 'paywall']
+            if any(indicator in self.text.lower() for indicator in paywall_indicators):
+                return False, "Paywall detected"
+            
+            # Check for CAPTCHA
+            if 'captcha' in self.text.lower() or self.soup.find(class_=lambda x: x and 'captcha' in x.lower()):
+                return False, "CAPTCHA detected"
         
         return True, None

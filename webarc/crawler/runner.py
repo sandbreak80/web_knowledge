@@ -161,6 +161,7 @@ class WebArcCrawler:
         allowed_prefix: Optional[str] = None,
         visited_urls: Optional[set] = None,
         version_lock: Optional[str] = None,
+        download_only: bool = False,
     ):
         """
         Initialize WebArc crawler.
@@ -182,7 +183,15 @@ class WebArcCrawler:
         self.allowed_prefix = allowed_prefix or self.config.allow_prefix
         self.visited_urls = visited_urls or set()
         self.version_lock = version_lock
-        self.extra_seed_urls = self._load_version_seed_urls() if self.version_lock else []
+        # DISABLED: Sitemap expansion was adding URLs from multiple versions
+        # Rely only on link following with strict filter instead
+        self.extra_seed_urls = []
+        self.download_only = download_only
+        
+        # Queue directory for download-only mode
+        if self.download_only:
+            self.queue_dir = self.output_dir / '_queue'
+            self.queue_dir.mkdir(parents=True, exist_ok=True)
         
         # Initialize components
         self.output_writer = OutputWriter(self.output_dir, self.config)
@@ -257,6 +266,13 @@ class WebArcCrawler:
         
         url = response.url
         
+        # STRICT FILTER: Only process URLs that start with the exact seed URL prefix
+        seed_prefix = '/'.join(self.seed_url.split('/')[:7])  # Get up to /en
+        if not url.startswith(seed_prefix):
+            logger.debug(f"Skipping {url} in process_response: does not start with {seed_prefix}")
+            self.stats['pages_skipped'] += 1
+            return
+        
         # Skip binary files (images, archives, etc.)
         content_type = response.headers.get('Content-Type', b'').decode('utf-8', errors='ignore').lower()
         if content_type and not any(ct in content_type for ct in ['text/html', 'text/plain', 'application/xhtml']):
@@ -272,6 +288,34 @@ class WebArcCrawler:
             self.stats['pages_skipped'] += 1
             return
         
+        # Download-only mode: just save HTML to queue, don't process
+        if self.download_only:
+            import hashlib
+            import json
+            from urllib.parse import urlparse
+            
+            # Create queue entry
+            url_hash = hashlib.sha256(url.encode()).hexdigest()[:16]
+            queue_file = self.queue_dir / f"{url_hash}.html"
+            meta_file = self.queue_dir / f"{url_hash}.json"
+            
+            # Save HTML
+            queue_file.write_text(html, encoding='utf-8')
+            
+            # Save metadata
+            meta = {
+                'url': url,
+                'status': response.status,
+                'content_type': content_type,
+                'fetched_at': datetime.utcnow().isoformat() + 'Z',
+            }
+            meta_file.write_text(json.dumps(meta), encoding='utf-8')
+            
+            logger.debug(f"Queued {url} for processing")
+            self.stats['pages_extracted'] += 1  # Count as "extracted" in download-only mode
+            return
+        
+        # Normal mode: process through pipeline
         try:
             pipeline_result = self.pipeline.process(url, html, response.status)
         except Exception as e:  # pragma: no cover - defensive coverage
@@ -346,8 +390,9 @@ class WebArcCrawler:
             except Exception:
                 continue
             for url in _extract_sitemap_urls(sm_resp.text):
-                # Simple check: only include URLs starting with the seed URL path
-                if not url.startswith('https://docs.appdynamics.com/appd/24.x/latest/en'):
+                # STRICT FILTER: Only include URLs that start with the exact seed URL prefix
+                seed_prefix = '/'.join(self.seed_url.split('/')[:7])  # Get up to /en
+                if not url.startswith(seed_prefix):
                     continue
                 version_urls.add(url)
 

@@ -7,9 +7,9 @@ from pydantic import BaseModel, Field
 class CrawlerConfig(BaseModel):
     """Crawler configuration settings."""
     max_depth: int = 3
-    concurrent_requests: int = 8
-    concurrent_requests_per_domain: int = 3
-    download_delay: float = 0.5
+    concurrent_requests: int = 16  # Increased for faster crawling
+    concurrent_requests_per_domain: int = 10  # Increased for faster extraction
+    download_delay: float = 0.1  # Reduced delay for faster processing
     download_timeout: int = 30
     max_page_size_mb: int = 10
     retry_times: int = 2
@@ -19,7 +19,7 @@ class CrawlerConfig(BaseModel):
     autothrottle_enabled: bool = True
     autothrottle_start_delay: int = 1
     autothrottle_max_delay: int = 10
-    autothrottle_target_concurrency: float = 2.0
+    autothrottle_target_concurrency: float = 10.0  # Increased for faster extraction
     
     # Memory management
     memusage_enabled: bool = True
