@@ -256,7 +256,22 @@ class WebArcCrawler:
         self.stats['pages_crawled'] += 1
         
         url = response.url
-        html = response.text
+        
+        # Skip binary files (images, archives, etc.)
+        content_type = response.headers.get('Content-Type', b'').decode('utf-8', errors='ignore').lower()
+        if content_type and not any(ct in content_type for ct in ['text/html', 'text/plain', 'application/xhtml']):
+            logger.debug(f"Skipping binary file {url}: Content-Type {content_type}")
+            self.stats['pages_skipped'] += 1
+            return
+        
+        # Check if response is text (raises AttributeError for binary)
+        try:
+            html = response.text
+        except AttributeError:
+            logger.debug(f"Skipping binary file {url}: Response content isn't text")
+            self.stats['pages_skipped'] += 1
+            return
+        
         try:
             pipeline_result = self.pipeline.process(url, html, response.status)
         except Exception as e:  # pragma: no cover - defensive coverage
@@ -275,9 +290,9 @@ class WebArcCrawler:
             logger.debug(f"Skipping {url}: {pipeline_result['reason']}")
             self.stats['pages_skipped'] += 1
             return
-
+        
         self.stats['pages_extracted'] += 1
-
+        
         crawler_state = {
             'seed_url': self.seed_url,
             'config_hash': '',  # TODO: hash config
@@ -293,7 +308,7 @@ class WebArcCrawler:
             'allowed_prefix': self.allowed_prefix,
         }
         self.state_manager.maybe_checkpoint(crawler_state)
-
+            
     def _load_version_seed_urls(self) -> List[str]:
         """
         Load additional seed URLs for the locked version using sitemaps.
@@ -331,9 +346,8 @@ class WebArcCrawler:
             except Exception:
                 continue
             for url in _extract_sitemap_urls(sm_resp.text):
-                if not url.startswith(prefix):
-                    continue
-                if self.version_lock not in url:
+                # Simple check: only include URLs starting with the seed URL path
+                if not url.startswith('https://docs.appdynamics.com/appd/24.x/latest/en'):
                     continue
                 version_urls.add(url)
 

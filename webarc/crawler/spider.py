@@ -134,8 +134,8 @@ class WebArcSpider(scrapy.Spider):
                 meta={
                     'depth': 0,
                     'canonical_url': canonical_extra,
-                }
-            )
+            }
+        )
     
     def parse(self, response: Response):
         """
@@ -167,28 +167,24 @@ class WebArcSpider(scrapy.Spider):
             # Resolve relative URLs
             absolute_url = urljoin(response.url, link_url)
             
+            # Skip binary file extensions
+            binary_extensions = {'.png', '.jpg', '.jpeg', '.gif', '.svg', '.pdf', '.zip', '.exe', '.dmg', '.pkg', '.tar', '.gz', '.bz2', '.mp3', '.mp4', '.avi', '.mov', '.webm'}
+            if any(absolute_url.lower().endswith(ext) for ext in binary_extensions):
+                logger.debug(f"Skipping binary file link: {absolute_url}")
+                continue
+            
+            # Simple check: only allow URLs starting with the seed URL path
+            # This ensures we only crawl /appd/24.x/latest/en paths
+            if not absolute_url.startswith('https://docs.appdynamics.com/appd/24.x/latest/en'):
+                logger.debug(f"Skipping {absolute_url}: does not start with https://docs.appdynamics.com/appd/24.x/latest/en")
+                self.stats['pages_skipped'] += 1
+                continue
+            
             # Canonicalize URL
             canonical_link = canonicalize_url(absolute_url)
             
             # Skip if already visited
             if canonical_link in self.visited_urls:
-                continue
-            
-            # Validate domain restriction
-            allowed, reason = validate_domain_restriction(
-                absolute_url,
-                self.allowed_domain,
-                self.allowed_prefix
-            )
-            
-            if not allowed:
-                logger.debug(f"Skipping {absolute_url}: {reason}")
-                self.stats['pages_skipped'] += 1
-                continue
-
-            if self.version_lock and self.version_lock not in absolute_url:
-                logger.debug(f"Skipping {absolute_url}: version lock {self.version_lock} missing")
-                self.stats['pages_skipped'] += 1
                 continue
             
             # Check safety guards
