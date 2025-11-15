@@ -1,0 +1,168 @@
+# webarc.yaml - Complete configuration schema
+
+crawler:
+  max_depth: 3                    # Maximum crawl depth
+  concurrent_requests: 8          # Total concurrent requests
+  concurrent_requests_per_domain: 3  # Per-domain limit
+  download_delay: 0.5             # Seconds between requests (same domain)
+  download_timeout: 30            # Seconds before timeout
+  max_page_size_mb: 10            # Skip pages larger than this
+  retry_times: 2                  # Retry failed requests
+  user_agent: "WebArc/1.0 (+https://github.com/yourorg/webarc) Documentation Archiver"
+  
+  # Scrapy auto-throttle settings
+  autothrottle_enabled: true
+  autothrottle_start_delay: 1
+  autothrottle_max_delay: 10
+  autothrottle_target_concurrency: 2.0
+  
+  # Memory management
+  memusage_enabled: true
+  memusage_limit_mb: 1024         # Stop crawl if exceeded
+  memusage_warning_mb: 768        # Log warning threshold
+  
+  # Response limits
+  download_maxsize: 10485760      # 10MB max
+  download_warnsize: 5242880      # 5MB warning
+
+safety:
+  mode: "advisory"                # "advisory" (warn) or "enforce" (block)
+  respect_robots_txt: true
+  same_domain_only: true
+  max_url_length: 2000            # Block suspiciously long URLs
+  max_query_params: 10            # Detect param explosion
+  max_pagination_depth: 50        # Stop infinite pagination
+  entropy_threshold: 3.5          # UUID/hash detection threshold
+  max_redirects: 10               # Prevent redirect loops
+  
+  # Blocked URL patterns (regex)
+  blocked_patterns:
+    - ".*/auth/.*"
+    - ".*/login/.*"
+    - ".*/search\\?.*"
+    - ".*/api/.*"
+    - ".*\\.(zip|exe|dmg|pkg)$"
+  
+  # Keywords indicating pagination
+  pagination_keywords:
+    - "page"
+    - "offset"
+    - "start"
+    - "limit"
+    - "skip"
+  
+  # Use StevenBlack hosts blocklist
+  use_blocklist: true
+  blocklist_path: "./lists/stevenblack_hosts.txt"
+
+render:
+  static_first: true              # Try static HTML before JS
+  js_timeout_ms: 15000            # Playwright page load timeout
+  js_network_idle_ms: 5000        # Wait for network idle
+  browser_pool_size: 3            # Max concurrent browser instances
+  reuse_contexts: true            # Don't restart browser each page
+  disable_images: true            # Speed up JS rendering
+  
+  # When to trigger JavaScript rendering
+  js_detection_triggers:
+    - "Loading..."
+    - "Please wait"
+    - "data-react-root"
+    - "data-reactroot"
+    - "ng-app"
+    - "vue-app"
+    - "<div id=\"root\"></div>"
+    - "<div id=\"app\"></div>"
+  
+  # Browser args for Docker compatibility
+  browser_args:
+    - "--no-sandbox"
+    - "--disable-dev-shm-usage"
+    - "--disable-gpu"
+
+extraction:
+  min_content_density: 0.3        # Reject low-quality pages
+  min_content_length: 100         # Minimum characters
+  min_word_count: 50              # Minimum words
+  max_nav_link_ratio: 0.5         # Detect nav-heavy pages
+  min_paragraph_count: 1          # Must have body content
+  require_heading: true           # Must have at least one heading
+  
+  # HTML tags to preserve structure
+  preserve_html_tags:
+    - "table"
+    - "pre"
+    - "code"
+    - "img"
+    - "blockquote"
+  
+  # Content quality checks
+  check_language: true            # Verify expected language
+  detect_paywalls: true           # Skip paywall pages
+  detect_captcha: true           # Skip CAPTCHA pages
+
+output:
+  format: "obsidian"              # Output format
+  obsidian_link_style: "wikilink" # "wikilink" or "markdown"
+  relative_links: true            # Use relative paths
+  preserve_anchors: true          # Keep #section-id in links
+  slug_strategy: "url-path"       # "url-path" or "title-based"
+  max_filename_length: 200        # Truncate long filenames
+  deduplicate: "content-hash"     # "content-hash" or "url-canonical"
+  
+  # Image handling
+  image_mode: "ignore"            # "ignore", "download", or "embed"
+  image_max_size_mb: 5            # Per-image limit (if downloading)
+  image_embed_max_kb: 50          # Max size for base64 embedding
+  image_formats:
+    - "png"
+    - "jpg"
+    - "jpeg"
+    - "gif"
+    - "svg"
+  
+  # File organization
+  create_index: true              # Generate _index.md files
+  preserve_directory_structure: true
+  
+  # Character encoding
+  output_encoding: "utf-8"
+  normalize_unicode: "NFC"        # Unicode normalization
+
+logging:
+  level: "INFO"                   # DEBUG, INFO, WARNING, ERROR
+  format: "json"                  # "json" or "text"
+  file: "./logs/webarc.log"
+  rotate: true
+  max_log_size_mb: 100
+  backup_count: 5
+  
+  # Progress reporting
+  show_progress: true
+  progress_update_interval: 1     # Seconds
+
+# Site-specific adapters
+adapters:
+  confluence:
+    enabled: true
+    domains:
+      - "docs.appdynamics.com"
+    content_selector: ".confluence-content"
+    remove_selectors:
+      - ".ia-fixed-sidebar"
+      - ".page-metadata"
+      - ".footer"
+  
+  mkdocs:
+    enabled: true
+    content_selector: ".md-content"
+    remove_selectors:
+      - ".md-sidebar"
+      - ".md-header"
+  
+  sphinx:
+    enabled: true
+    content_selector: "div.body"
+    remove_selectors:
+      - ".sphinxsidebar"
+      - ".related"
